@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Open Aneurysm Repair — Interactive Learning Game</title>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --accent:#7c3aed; --muted:#9ca3af; --good:#10b981; --bad:#ef4444;
+      --glass: rgba(255,255,255,0.04);
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#031022 0%, #07142a 100%);color:#e6eef8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .app{width:1100px;max-width:100%;display:grid;grid-template-columns:1fr 360px;gap:20px}
+
+    .panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:18px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    header h1{font-size:20px;margin:0}
+    header p{margin:0;color:var(--muted);font-size:13px}
+
+    .game-area{display:flex;flex-direction:column;gap:12px}
+    .toolbox{display:flex;flex-wrap:wrap;gap:10px;padding:10px;border-radius:10px;background:var(--glass)}
+    .drag-item{background:linear-gradient(180deg,#0f1b2a,#071226);padding:10px 12px;border-radius:10px;cursor:grab;border:1px solid rgba(255,255,255,0.03);min-width:190px}
+    .drag-item.dragging{opacity:0.6;transform:scale(0.98)}
+    .drag-item .title{font-weight:600}
+    .drag-item .hint{font-size:12px;color:var(--muted);margin-top:6px}
+
+    .timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .slot{min-height:120px;border-radius:10px;padding:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));border:2px dashed rgba(255,255,255,0.04);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:all .18s}
+    .slot.over{background:linear-gradient(180deg, rgba(124,58,237,0.12), rgba(124,58,237,0.06));border-color:rgba(124,58,237,0.7)}
+    .slot .slot-label{font-size:13px;color:var(--muted);margin-bottom:6px}
+    .slot .placed{margin-top:6px}
+
+    .controls{display:flex;gap:8px;align-items:center}
+    button{background:var(--accent);border:none;padding:8px 12px;border-radius:10px;color:white;font-weight:600;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+
+    .side{display:flex;flex-direction:column;gap:12px}
+    .representation{background:linear-gradient(180deg,#07132a,#041029);border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
+    .heart-wrap{width:240px;height:240px;display:flex;align-items:center;justify-content:center}
+
+    /* SVG heart animation */
+    .heart{filter:drop-shadow(0 8px 30px rgba(124,58,237,0.18))}
+    .pulse{transform-origin:50% 60%;animation:pulse 1s infinite ease-in-out}
+    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+    .status{font-size:13px;color:var(--muted)}
+    .feedback{font-weight:700}
+
+    .confetti{position:fixed;left:50%;top:30%;transform:translateX(-50%);pointer-events:none}
+
+    /* responsive */
+    @media (max-width:1000px){.app{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main class="panel">
+      <header>
+        <div style="width:46px;height:46px;border-radius:10px;background:linear-gradient(180deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;font-weight:800;color:white">OR</div>
+        <div>
+          <h1>Open Aneurysm Repair — Interactive Sequence Game</h1>
+          <p>Drag the concept-cards into the correct timeline order. Educational simulation — not clinical guidance.</p>
+        </div>
+      </header>
+
+      <section class="game-area">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center">
+            <strong>Toolbox</strong>
+            <span style="color:var(--muted);font-size:13px">(drag the cards to the timeline)</span>
+          </div>
+          <div class="controls">
+            <button id="checkBtn">Check Order</button>
+            <button id="shuffleBtn" class="ghost">Shuffle</button>
+            <button id="resetBtn" class="ghost">Reset</button>
+          </div>
+        </div>
+
+        <div class="toolbox" id="toolbox">
+          <!-- Drag items inserted by JS -->
+        </div>
+
+        <div style="margin-top:4px;font-size:13px;color:var(--muted)">Timeline (left → right): Place steps in the order the concept occurs during an **open aneurysm repair** procedure. This simulation focuses on team coordination, monitoring and major conceptual steps — for learning only.</div>
+
+        <div style="margin-top:12px">
+          <div class="timeline" id="timeline">
+            <div class="slot" data-index="0"><div class="slot-label">Step 1</div><div class="placed"></div></div>
+            <div class="slot" data-index="1"><div class="slot-label">Step 2</div><div class="placed"></div></div>
+            <div class="slot" data-index="2"><div class="slot-label">Step 3</div><div class="placed"></div></div>
+            <div class="slot" data-index="3"><div class="slot-label">Step 4</div><div class="placed"></div></div>
+            <div class="slot" data-index="4"><div class="slot-label">Step 5</div><div class="placed"></div></div>
+            <div class="slot" data-index="5"><div class="slot-label">Step 6</div><div class="placed"></div></div>
+            <div class="slot" data-index="6"><div class="slot-label">Step 7</div><div class="placed"></div></div>
+          </div><div class="placed"></div></div>
+            <div class="slot" data-index="1"><div class="slot-label">Step 2</div><div class="placed"></div></div>
+            <div class="slot" data-index="2"><div class="slot-label">Step 3</div><div class="placed"></div></div>
+            <div class="slot" data-index="3"><div class="slot-label">Step 4</div><div class="placed"></div></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <div class="status">Attempts: <span id="attempts">0</span></div>
+          <div class="feedback" id="feedback"></div>
+        </div>
+
+      </section>
+    </main>
+
+    <aside class="side">
+      <div class="representation panel">
+        <strong>Animated Representation</strong>
+        <div class="heart-wrap">
+          <!-- Simple anatomical-styled heart (SVG, stylized) -->
+          <svg class="heart" width="220" height="220" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(110,110)">
+              <g id="heartGroup" class="pulse">
+                <path d="M-60,-20 C-70,-60 -20,-95 0,-60 C20,-95 70,-60 60,-20 C60,30 0,65 0,80 C0,65 -60,30 -60,-20 Z" fill="#ef476f" stroke="#b91c3a" stroke-width="3" />
+                <g transform="translate(-15,10)">
+                  <ellipse rx="6" ry="10" fill="#ffb4c6" />
+                </g>
+                <g transform="translate(25,0)">
+                  <ellipse rx="5" ry="8" fill="#ffd9e3" />
+                </g>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <div class="status">Heart rate: <span id="hr">72</span> bpm</div>
+        <div class="status">Perfusion: <span id="perf">Normal</span></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="playPulse">Start Pulse</button>
+          <button id="stopPulse" class="ghost">Stop</button>
+        </div>
+      </div>
+
+      <div class="panel" style="padding:12px">
+        <strong>How it teaches</strong>
+        <p style="color:var(--muted);font-size:13px;margin:8px 0">This game builds conceptual sequencing and team-awareness. It's <u>not</u> a guide for procedures. Use in classrooms or demos to explain high-level steps and coordination.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="hintBtn" class="ghost">Show Hints</button>
+          <button id="explainBtn" class="ghost">Explain Answers</button>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  <div id="confetti-holder" class="confetti"></div>
+
+  <script>
+    /* ======== Game Data ======== */
+    // IMPORTANT: conceptual-only labels (no step-by-step surgical technique)
+    const ITEMS = [
+      {id:'preop', label:'Before surgery checkup', hint:'Doctors review scans and make a plan'},
+      {id:'anesthesia', label:'Anesthesia & monitors', hint:'Patient goes to sleep, team sets monitors'},
+      {id:'exposure', label:'Find the aneurysm area', hint:'Opening area so doctors can see safely'},
+      {id:'repair', label:'Fix the weak spot', hint:'Doctors repair or replace the damaged section'},
+      {id:'restore', label:'Restore blood flow', hint:'Make sure blood moves correctly again'},
+      {id:'check', label:'Check for bleeding', hint:'Team checks if everything is safe and steady'},
+      {id:'postop', label:'Recovery & watching closely', hint:'Patient goes to recovery for careful monitoring'}
+    ];
+
+    // The 'correct' conceptual timeline we expect in order (we'll use first 4 slots by default)
+    const CORRECT_SEQUENCE = ['preop','anesthesia','exposure','repair','restore','check','postop'];
+
+    /* ======== UI References ======== */
+    const toolbox = document.getElementById('toolbox');
+    const timeline = document.getElementById('timeline');
+    const slots = Array.from(document.querySelectorAll('.slot'));
+    const attemptsEl = document.getElementById('attempts');
+    const feedbackEl = document.getElementById('feedback');
+    const checkBtn = document.getElementById('checkBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const hintBtn = document.getElementById('hintBtn');
+    const explainBtn = document.getElementById('explainBtn');
+
+    let attempts = 0;
+    let dragged = null;
+
+    /* ======== Utilities ======== */
+    function createCard(item){
+      const div = document.createElement('div');
+      div.className = 'drag-item';
+      div.draggable = true;
+      div.dataset.id = item.id;
+      div.innerHTML = `<div class='title'>${item.label}</div><div class='hint'>${item.hint}</div>`;
+
+      div.addEventListener('dragstart', e=>{
+        dragged = div;
+        div.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', item.id);
+        playSound('pick');
+      });
+      div.addEventListener('dragend', ()=>{ dragged=null; div.classList.remove('dragging'); });
+      return div;
+    }
+
+    function shuffle(array){
+      for(let i=array.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1)); [array[i],array[j]] = [array[j],array[i]]
+      }
+      return array;
+    }
+
+    /* ======== Build toolbox ======== */
+    function populateToolbox(items){
+      toolbox.innerHTML='';
+      items.forEach(it => toolbox.appendChild(createCard(it)));
+    }
+
+    // Start with shuffled subset (first 4 by default) for the playable cards
+    let currentItems = shuffle(ITEMS.slice()).slice(0,4);
+    populateToolbox(currentItems);
+
+    /* ======== Drag & Drop Handlers ======== */
+    slots.forEach(slot=>{
+      slot.addEventListener('dragover', e=>{ e.preventDefault(); slot.classList.add('over'); });
+      slot.addEventListener('dragleave', ()=>{ slot.classList.remove('over'); });
+      slot.addEventListener('drop', e=>{
+        e.preventDefault(); slot.classList.remove('over');
+        const id = e.dataTransfer.getData('text/plain');
+        handleDrop(id, slot);
+      });
+    });
+
+    function handleDrop(id, slot){
+      // find the item (might not be in toolbox if already placed)
+      const existing = document.querySelector(`.drag-item[data-id='${id}']`);
+      let card = existing;
+      // If the dragged item came from toolbox, move it
+      if (!card) return; // nothing to drop
+
+      // Remove from previous container if any
+      if (card.parentElement) card.parentElement.removeChild(card);
+
+      // Place into slot
+      const placed = slot.querySelector('.placed');
+      // If slot already has something, send it back to toolbox
+      if (placed.firstElementChild) {
+        toolbox.appendChild(placed.firstElementChild);
+      }
+      placed.appendChild(card);
+      playSound('drop');
+    }
+
+    /* ======== Check Answer ======== */
+    checkBtn.addEventListener('click', ()=>{
+      attempts++;
+      attemptsEl.textContent = attempts;
+      const placedIds = slots.map(s => s.querySelector('.placed').firstElementChild?.dataset.id || null);
+      // We will compare the conceptual order to the intended sequence by finding indexes
+      // Map each placed id to its index in CORRECT_SEQUENCE; if not found -> -1
+      const indexes = placedIds.map(id => id ? CORRECT_SEQUENCE.indexOf(id) : -1);
+      const correct = indexes.every((v,i,arr)=> v!==-1 && (i===0 || v>arr[i-1]));
+
+      if (correct){
+        feedbackEl.textContent = 'Great! Conceptual order looks correct.';
+        playSound('success');
+        triggerConfetti();
+      } else {
+        feedbackEl.textContent = 'Not quite — some cards are out of conceptual order.';
+        playSound('wrong');
+      }
+    });
+
+    /* ======== Shuffle / Reset ======== */
+    shuffleBtn.addEventListener('click', ()=>{
+      // return any placed cards to toolbox, shuffle and repopulate
+      slots.forEach(s=>{
+        const child = s.querySelector('.placed').firstElementChild;
+        if (child) toolbox.appendChild(child);
+      });
+      currentItems = shuffle(ITEMS.slice()).slice(0,4);
+      populateToolbox(currentItems);
+      feedbackEl.textContent='Shuffled. Try again!';
+      playSound('shuffle');
+    });
+
+    resetBtn.addEventListener('click', ()=>{
+      slots.forEach(s=>{ const child = s.querySelector('.placed').firstElementChild; if (child) toolbox.appendChild(child); });
+      populateToolbox(currentItems);
+      attempts = 0; attemptsEl.textContent = attempts; feedbackEl.textContent='Reset.'; playSound('reset');
+    });
+
+    /* ======== Hints / Explain ======== */
+    hintBtn.addEventListener('click', ()=>{
+      // show hints by briefly highlighting the conceptual preferred first item
+      alert('Hint: Start with pre-op assessment and team planning, then anesthesia/monitoring, exposure, repair.');
+    });
+    explainBtn.addEventListener('click', ()=>{
+      alert('Answer explanation (conceptual):\n1) Pre-op planning\n2) Anesthesia and monitoring\n3) Exposure of the affected area (conceptual)\n4) Repair (graft/simulation)\n5) Restore flow and check hemostasis\n6) Post-op care.\n\nThis list is a high-level sequence for learning purposes only.');
+    });
+
+    /* ======== Simple Sounds using WebAudio ======== */
+    const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    function playTone(freq, time=0.08){
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.value = 0.0001; g.gain.exponentialRampToValueAtTime(0.12,audioCtx.currentTime+0.01);
+      o.start(); o.stop(audioCtx.currentTime+time);
+      g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+time);
+    }
+    function playSound(kind){
+      // resume if suspended due to user gesture policy
+      if(audioCtx.state==='suspended') audioCtx.resume();
+      if(kind==='pick') playTone(880,0.06);
+      if(kind==='drop') playTone(660,0.08);
+      if(kind==='success') playTone(1100,0.18);
+      if(kind==='wrong') playTone(220,0.12);
+      if(kind==='shuffle') playTone(450,0.08);
+      if(kind==='reset') playTone(320,0.05);
+    }
+
+    /* ======== Heart representation controls ======== */
+    const heartGroup = document.getElementById('heartGroup');
+    const hrEl = document.getElementById('hr');
+    const perfEl = document.getElementById('perf');
+    const playPulse = document.getElementById('playPulse');
+    const stopPulse = document.getElementById('stopPulse');
+
+    let pulseInterval = null; let bpm = 72;
+    function startPulse(){
+      if(pulseInterval) return;
+      heartGroup.classList.add('pulse');
+      pulseInterval = setInterval(()=>{
+        // simulate small HR variations
+        bpm = 70 + Math.floor(Math.random()*8);
+        hrEl.textContent = bpm;
+        perfEl.textContent = (bpm>60 && bpm<100)? 'Normal' : 'Check';
+      }, 900);
+      playSound('success');
+    }
+    function stopPulseFn(){
+      heartGroup.classList.remove('pulse');
+      clearInterval(pulseInterval); pulseInterval = null;
+      hrEl.textContent = '--'; perfEl.textContent = '--';
+    }
+    playPulse.addEventListener('click', startPulse);
+    stopPulse.addEventListener('click', stopPulseFn);
+
+    /* ======== Confetti (small) ======== */
+    function triggerConfetti(){
+      const holder = document.getElementById('confetti-holder');
+      holder.innerHTML='';
+      for(let i=0;i<28;i++){
+        const el = document.createElement('div');
+        el.style.width='10px'; el.style.height='14px'; el.style.position='absolute';
+        el.style.left = (50 + (Math.random()*40-20)) + '%';
+        el.style.background = `hsl(${Math.floor(Math.random()*360)} 80% 60%)`;
+        el.style.transform = `translateY(-20vh) rotate(${Math.random()*360}deg)`;
+        el.style.animation = `confetti-fall ${1.2+Math.random()*0.8}s linear forwards`;
+        holder.appendChild(el);
+      }
+      setTimeout(()=> holder.innerHTML='',2000);
+    }
+    const style = document.createElement('style');
+    style.textContent = `@keyframes confetti-fall{to{transform:translateY(40vh) rotate(720deg);opacity:0}}`;
+    document.head.appendChild(style);
+
+    /* ======== Init notes ======== */
+    // Make toolbox tabbable for accessibility
+    document.querySelectorAll('.drag-item').forEach(x=>x.setAttribute('tabindex','0'));
+
+    // tiny accessibility: allow keyboard 'Enter' to move first available item into first empty slot
+    document.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){
+        const firstCard = toolbox.querySelector('.drag-item');
+        const firstSlot = slots.find(s=>!s.querySelector('.placed').firstElementChild);
+        if(firstCard && firstSlot){ handleDrop(firstCard.dataset.id, firstSlot); }
+      }
+    });
+
+    // user gesture to enable audio in some browsers
+    document.body.addEventListener('click', ()=>{ if(audioCtx.state==='suspended') audioCtx.resume(); }, {once:true});
+
+  </script>
+</body>
+</html>
